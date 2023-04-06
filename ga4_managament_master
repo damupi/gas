@@ -1,0 +1,1622 @@
+// runs when spreadsheet is opened
+function onOpen() {
+  SpreadsheetApp.getUi() // Or DocumentApp or FormApp.
+      .createMenu('GA Management')
+      .addSubMenu(SpreadsheetApp.getUi().createMenu('GA Accounts and Views')
+          .addItem('List Universal Analytics Accounts', 'listGAAccounts')
+          .addItem('List Universal Analytics Properties', 'listGAProperties')
+          .addItem('List Universal Analytics Views', 'listGAViews')
+          .addItem('List Google Analytics 4 Accounts', 'listGA4Accounts')
+          .addItem('List all Google Analytics 4 Properties', 'listGA4Properties')
+          .addItem('List all Google Analytics 4 Data Streams', 'listGA4DataStreams'))
+        .addSeparator()          
+      .addSubMenu(SpreadsheetApp.getUi().createMenu('Custom Dimensions')
+           .addItem('List all Custom Dimensions and C. Properties for a property ID', 'listCDAndCMPerProperty')
+           .addItem('Insert Empty custom dimensions', 'insertCustomDimensions')
+           .addItem('Copy and Paste A Custom Dimension', 'copyAndPasteCustomDimension')                   
+           .addItem('Copy and Paste ALL GA4 Custom Dimensions from a property', 'copyAndPasteGA4CDs'))                    
+          .addSeparator()                     
+      .addSubMenu(SpreadsheetApp.getUi().createMenu('Users')
+          .addItem('Insert or Update Permissions','insertAccountUserLink')
+          .addItem('Delete Permissions','deleteAccountUserLink'))
+        .addSeparator()
+      .addSubMenu(SpreadsheetApp.getUi().createMenu('Filters')  
+          .addItem('Copy and paste a Filter','updateFilter'))
+        .addSeparator()
+      .addSubMenu(SpreadsheetApp.getUi().createMenu('Goals')
+          .addItem('List all Goals for a View Id','listGoals')
+          .addItem('Copy and paste a Goal','updateGoal'))
+      .addSeparator()    
+        .addItem('CREATE WEBSITE','automation')
+        .addSeparator()
+    .addToUi();        
+}
+
+
+////////////
+// returns an existing sheet with the given name or creates a new one.
+function listOrInsertSheet(sheetname){
+  var sheet = SpreadsheetApp.getActive().getSheetByName(sheetname);
+  if(sheet){
+    return sheet;
+  } else {
+    return SpreadsheetApp.getActive().insertSheet(sheetname);
+  }
+}
+
+///////////
+// add a new sheet.
+///////////
+function addSheet(sheetname){
+  var ss = SpreadsheetApp.getActive();
+  var sheet = ss.getSheetByName(sheetname);
+  if (!sheet) {
+      ss.insertSheet(sheetname);
+  }
+  return;
+}
+
+///////////
+// delete the sheet given
+///////////
+function deleteSheet(sheetname){
+    var ss = SpreadsheetApp.getActive();
+    var sheet = ss.getSheetByName(sheetname);
+    if (sheet) {
+      ss.deleteSheet(sheet);
+      }
+    return;
+} 
+
+
+////////////
+// Deletes all rows above the header of a sheet
+function deleteAllBelow(sheetname, start = 2){
+  var sheet, start, end;
+  sheet = SpreadsheetApp.getActive().getSheetByName(sheetname); 
+  
+  end = sheet.getLastRow();//How many rows to delete -
+  //console.log('start is:' + start + ' and end is: '+ end);
+
+  //if there's more than 1 row, then remove them
+  if((end-start)>1){
+  //The blank rows after the last row with content will not be deleted
+    sheet.deleteRows(start, (end-1));
+    }else{return};
+}
+
+function getLastRow(sheetname){
+  sheet = SpreadsheetApp.getActive().getSheetByName(sheetname);
+  lastRow = sheet.getLastRow();
+  return lastRow;
+}
+
+function getLastColumn(sheetname){
+  sheet = SpreadsheetApp.getActive().getSheetByName(sheetname);
+  lastColumn = sheet.getLastColumn();
+  return lastColumn;
+}
+
+function getLastCellDisplayValue(sheetname){
+  sheet = SpreadsheetApp.getActive().getSheetByName(sheetname);
+  var lastRow = sheet.getLastRow();
+  var lastColumn = sheet.getLastColumn();
+  var lastCell = sheet.getRange(lastRow, lastColumn);
+  Logger.log(lastCell.getDisplayValue());
+  return lastCell.getDisplayValue();
+}
+
+////////////
+// Returns the value displayed of a Cell
+function getCellDisplayValue(sheetname,cell){
+
+  var sheet = SpreadsheetApp.getActive().getSheetByName(sheetname);
+  var value = sheet.getRange(cell).getDisplayValue();
+  //var value2 = sheet.getRange(cell).getValue();
+  //console.log('the value displayed in the cell is: ' + value);
+  return value;
+}
+
+////////////
+// Give a sheetname, a range (C4 o B4:C4), and a value it writes the cell
+function writeCells(sheetname, range, value){
+  var sheet = SpreadsheetApp.getActive().getSheetByName(sheetname);
+  var range = sheet.getRange(range);
+  range.setValue(value);
+}
+
+////////////
+// Give a sheetname, a range (C4 o B4:C4), and a value it color it
+function colorCells(sheetname, range, color){
+  var sheet = SpreadsheetApp.getActive().getSheetByName(sheetname);
+  var range = sheet.getRange(range);
+  range.setBackground(color);
+}
+///////////
+// Returns a list of all GA properties for the authorized user.
+function listGAAccounts() {
+  var openss = SpreadsheetApp.getActiveSpreadsheet();
+  listOrInsertSheet('UA ACCOUNTS');
+  deleteAllBelow('UA ACCOUNTS');
+  var sheet = SpreadsheetApp.getActive().getSheetByName('UA ACCOUNTS');
+
+  // Freezes the first row
+  sheet.setFrozenRows(1);
+  // Set values on the first row
+  sheet.getRange("A1:B1").setValues([['Account Name', 'Account ID']]);
+
+  var accounts = Analytics.Management.Accounts.list();
+  //console.log(accounts);
+   if (accounts.items && accounts.items.length)  {
+     accountsId = [];
+     for (var i = 0; i < accounts.items.length; i++) {
+       sheet.appendRow([accounts.items[i].name,accounts.items[i].id]);
+       }
+   }
+   return accounts;
+}
+
+
+///////////
+// Returns a list of all GA4 Accounts for the authorized user.
+function listGA4Accounts() {
+  var openss = SpreadsheetApp.getActiveSpreadsheet();
+  listOrInsertSheet('GA4 ACCOUNTS');
+  deleteAllBelow('GA4 ACCOUNTS');
+  var sheet = SpreadsheetApp.getActive().getSheetByName('GA4 ACCOUNTS');
+
+  // Freezes the first row
+  sheet.setFrozenRows(1);
+  // Set values on the first row
+  sheet.getRange("A1:C1").setValues([['Account Id', 'Account Name', 'Region']]);
+
+  //var accounts = Analytics.Management.Accounts.list();
+  var accountsLst = AnalyticsAdmin.Accounts.list();
+  console.log(accountsLst);
+   if (accountsLst.accounts && accountsLst.accounts.length)  {
+     accountsId = [];
+     for (var i = 0; i < accountsLst.accounts.length; i++) {
+        //console.log(accountsLst.accounts[i].name);
+        var accountId = accountsLst.accounts[i].name.replace(/accounts\//, '');
+        console.log(accountId);
+        console.log(accountsLst.accounts[i].displayName);
+        console.log(accountsLst.accounts[i].regionCode);
+        sheet.appendRow([
+          accountId, 
+          accountsLst.accounts[i].displayName,
+          accountsLst.accounts[i].regionCode 
+        ]);
+     }
+   }
+   return accountsLst.accounts;
+}
+
+///////////
+// Returns a list of all GA4 properties for the authorized user.
+function listGA4Properties() {
+  
+  var openss = SpreadsheetApp.getActiveSpreadsheet();
+  listOrInsertSheet('GA4 Properties');
+  deleteAllBelow('GA4 Properties');
+  var sheet = SpreadsheetApp.getActive().getSheetByName('GA4 Properties');
+
+  // Freezes the first row
+  sheet.setFrozenRows(1);
+  // Set values on the first row
+  sheet.getRange("A1:E1").setValues([['Account Id', 'Account Name', 'Property Id', 'Property Name', 'Timezone']]);
+
+  //var accounts = Analytics.Management.Accounts.list();
+  var accountsLst = AnalyticsAdmin.Accounts.list();
+  // console.log(accountsLst);
+    if (accountsLst.accounts && accountsLst.accounts.length)  {
+     //accountsId = [];
+      for (var i = 0; i < accountsLst.accounts.length; i++) {
+        //accountsId.push(accountId);
+        var accountName = accountsLst.accounts[i].name;
+        var filter = 'parent:' + accountName;
+        // console.log(filter);
+        var propertiesLst = AnalyticsAdmin.Properties.list({filter});
+        // console.log(propertiesLst);
+        // console.log('The length of properties is: ', propertiesLst.length);
+        if (propertiesLst.properties && propertiesLst.properties.length)  {
+          for (var j = 0; j < propertiesLst.properties.length; j++){
+            var accountId = accountsLst.accounts[i].name.replace(/accounts\//, '');
+            console.log('Account Id:', accountId);
+            // console.log('Account Id:', accountsLst.accounts[i].name);
+            console.log('Account Name:', accountsLst.accounts[i].displayName);
+            var propertyId = propertiesLst.properties[j].name.replace(/properties\//, '');
+            console.log('Property Id:', propertyId);
+            // console.log('Property Id:', propertiesLst.properties[j].name);
+            console.log('Property Name:', propertiesLst.properties[j].displayName);
+            console.log('Timezone:', propertiesLst.properties[j].timeZone);
+            sheet.appendRow([
+              accountId, 
+              accountsLst.accounts[i].displayName,
+              propertyId, 
+              propertiesLst.properties[j].displayName, 
+              propertiesLst.properties[j].timeZone
+            ]);
+          }
+        } else {console.log('There are no properties for the ', accountsLst.accounts[i].displayName, ' account' )};
+      }
+    }
+
+  //  var filter = "parent:accounts/194184363";    
+  //  var propertiesLst = AnalyticsAdmin.Properties.list({filter});
+  //  console.log(propertiesLst)
+   return;
+}
+
+////////////
+// List all the GA4 Data Streams in a Tab called GA4 Data Streams
+function listGA4DataStreams(property){
+  var openss = SpreadsheetApp.getActiveSpreadsheet();
+  listOrInsertSheet('GA4 Data Streams');
+  deleteAllBelow('GA4 Data Streams');
+  var sheet = SpreadsheetApp.getActive().getSheetByName('GA4 Data Streams');
+
+  // Freezes the first row
+  sheet.setFrozenRows(1);
+  // Set values on the first row
+  sheet.getRange("A1:G1").setValues([['Account Id', 'Account Name', 'Property Id', 'Property Name', 'Data Stream Id', 'Data Stream Name', 'Measurement Id']]); 
+
+  var accountsLst = AnalyticsAdmin.Accounts.list();
+  // console.log(accountsLst);
+    if (accountsLst.accounts && accountsLst.accounts.length)  {
+      for (var i = 0; i < accountsLst.accounts.length; i++) {
+        var accountName = accountsLst.accounts[i].name;
+        var filter = 'parent:' + accountName;
+        // console.log(filter);
+        var propertiesLst = AnalyticsAdmin.Properties.list({filter});
+        // console.log(propertiesLst);
+        // console.log('The length of properties is: ', propertiesLst.length);
+        if (propertiesLst.properties && propertiesLst.properties.length)  {
+          for (var j = 0; j < propertiesLst.properties.length; j++){
+            var dataStreamsLst = AnalyticsAdmin.Properties.DataStreams.list(propertiesLst.properties[j].name)
+            if (dataStreamsLst.dataStreams && dataStreamsLst.dataStreams.length){
+              for (var k = 0; k < dataStreamsLst.dataStreams.length; k++){  
+              var accountId = accountsLst.accounts[i].name.replace(/accounts\//, '');
+              var propertyId = propertiesLst.properties[j].name.replace(/properties\//, '');
+              var dataStreamId = dataStreamsLst.dataStreams[k].name.replace(/properties\/(\d+)\/dataStreams\/(\d+)/, '$2');
+              if (dataStreamsLst.dataStreams[k].androidAppStreamData){
+                measurementId = dataStreamsLst.dataStreams[k].androidAppStreamData.firebaseAppId;
+              } else if (dataStreamsLst.dataStreams[k].iosAppStreamData){
+                measurementId = dataStreamsLst.dataStreams[k].iosAppStreamData.firebaseAppId;
+              } else {
+                  measurementId = dataStreamsLst.dataStreams[k].webStreamData.measurementId;
+              }
+                sheet.appendRow([accountId,accountsLst.accounts[i].displayName, propertyId,propertiesLst.properties[j].displayName, dataStreamId, dataStreamsLst.dataStreams[k].displayName, measurementId]);
+              }
+            }
+          }
+        }
+      }  
+    }
+}
+
+
+
+////////////
+// extracts the accountid from a given propertyid
+function listAccountIdFromProperty(property){
+  return property.replace(/UA-(\d+)-\d+/i, '$1');
+}
+  /*
+   if (accounts.items && accounts.items.length)  {
+    for (var i = 0; i < accounts.items.length; i++) {
+      var webProperties = Analytics.Management.Webproperties.list(accounts.items[i].id);
+      for (var j = 0; j < webProperties.items.length; j++) {
+        var profiles = Analytics.Management.Profiles.list(accounts.items[i].id, webProperties.items[j].id);
+         for (var k = 0; k < profiles.items.length; k++) {  
+ sheet.appendRow([accounts.items[i].name,accounts.items[i].id, webProperties.items[j].name, webProperties.items[j].id, profiles.items[k].name, profiles.items[k].id]);
+         }
+      }
+   }}*/
+
+////////////
+// extracts the propertyid (pid) from a given view Id
+function listPidFromViewId(viewId){
+  var pId, values;
+  //viewId = '240829124';
+  var sheet = SpreadsheetApp.getActive().getSheetByName('UA VIEWS');
+  if(!sheet){
+    listGAViews();
+  }    
+  //search the viewId
+  //read all properties and views and store them in a 2 dimensional array
+  values = readRangeA1Notation('UA VIEWS','D', 'F');
+  //Logger.log(values);
+
+  // iteration with the 2 dimensional array
+  
+  // get the 2nd array
+  values.forEach(function(row) {
+    // if the 3rd element match with the viewId, return the property ID
+    if(row[2] === viewId){
+      Logger.log(row[0]);
+      pId = row[0]
+    }
+  });
+  return pId;
+}
+////////////
+// Read the display value of a cell
+function readRangeA1Notation(sheetname,col,row) {
+  var sheet, sheetname, col, NumCols, row, NumRows;
+  /*  
+  sheetname = 'UA VIEWS';
+  col = 'D';
+  row = 'F';
+  */
+  sheet = SpreadsheetApp.getActive().getSheetByName(sheetname); 
+  NumRows = sheet.getLastRow();//How many rows to delete -
+  NumCols = sheet.getLastColumn();
+
+  rangeStr = sheetname + '!' + col + '2:' + row + NumRows;
+  var range = SpreadsheetApp.getActive().getRange(rangeStr);
+  //var values = range.getValues();
+  var values = range.getDisplayValues();
+  //Logger.log(JSON.stringify(values));
+  return values;
+}
+
+
+//////////////
+// Returns a list of all GA views for the authorized user.
+function listGAViews() {
+  var openss = SpreadsheetApp.getActiveSpreadsheet();
+  listOrInsertSheet('UA VIEWS');
+  deleteAllBelow('UA VIEWS');
+  var sheet = SpreadsheetApp.getActive().getSheetByName('UA VIEWS');
+
+  // Freezes the first row
+  sheet.setFrozenRows(1);
+  // Set values on the first row
+  sheet.getRange("A1:G1").setValues([['Account Name', 'Account ID', 'Property Name', 'Property ID', 'View Name', 'View ID', 'Timezone']]);
+
+  var accounts = Analytics.Management.Accounts.list();
+   if (accounts.items && accounts.items.length)  {
+    for (var i = 0; i < accounts.items.length; i++) {
+      var webProperties = Analytics.Management.Webproperties.list(accounts.items[i].id);
+      for (var j = 0; j < webProperties.items.length; j++) {
+        var profiles = Analytics.Management.Profiles.list(accounts.items[i].id, webProperties.items[j].id);
+         for (var k = 0; k < profiles.items.length; k++) {  
+ sheet.appendRow([accounts.items[i].name,accounts.items[i].id, webProperties.items[j].name, webProperties.items[j].id, profiles.items[k].name, profiles.items[k].id, profiles.items[k].timezone]);
+         }
+      }
+   }}
+}
+
+//////////////
+// Returns a list of all GA views for the authorized user.
+function listGAProperties() {
+  var openss = SpreadsheetApp.getActiveSpreadsheet();
+  listOrInsertSheet('UA PROPERTIES');
+  deleteAllBelow('UA PROPERTIES');
+  var sheet = SpreadsheetApp.getActive().getSheetByName('UA PROPERTIES');
+
+  // Freezes the first row
+  sheet.setFrozenRows(1);
+  // Set values on the first row
+  sheet.getRange("A1:D1").setValues([['Account ID', 'Account Name', 'Property ID', 'Property Name']]);
+
+  var accounts = Analytics.Management.Accounts.list();
+  if (accounts.items && accounts.items.length)  {
+    for (var i = 0; i < accounts.items.length; i++) {
+      var webProperties = Analytics.Management.Webproperties.list(accounts.items[i].id);
+      for (var j = 0; j < webProperties.items.length; j++) {
+        var profiles = Analytics.Management.Profiles.list(accounts.items[i].id, webProperties.items[j].id);
+        sheet.appendRow([
+          accounts.items[i].id,
+          accounts.items[i].name, 
+          webProperties.items[j].id, 
+          webProperties.items[j].name
+        ]);
+      }
+    }
+  }
+}
+
+
+////////////
+// List of the Custom Dimensions.
+// Parameters needed: GA property ID.
+function listCustomDimensionsPerProperty(pid){
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Property: ' + pid);
+  var sourceProperty = pid;
+  var sourceAccount = listAccountIdFromProperty(sourceProperty); ; 
+
+  try {
+    // Freezes the first 2 rows
+    sheet.setFrozenRows(2);
+    
+    // Set values on the first row
+    sheet.getRange("A1:B1").setValues([[sourceAccount, sourceProperty]]);
+    // Set values on the second row
+    sheet.getRange("A2:F2").setValues([['Type', 'Index', 'Scope', 'Active', 'Name', 'ga Name']]);
+
+    var sourceDimensions = Analytics.Management.CustomDimensions.list(sourceAccount, sourceProperty);
+    // Extract items list from sourceDimensions variable
+    var items = sourceDimensions['items'];
+
+    if (items && items.length)  {
+      for (var i = 0; i < items.length; i++) {
+        // Appends a new row with 5 columns to the bottom of the
+        // spreadsheet containing the values in the array
+        sheet.appendRow(['Dimension' ,items[i].index, items[i].scope, items[i].active, items[i].name, items[i].id ]);
+        //Logger.log(['Dimension', items[i].index, items[i].scope, items[i].active, items[i].name, items[i].id ]);
+      }
+    }
+  } catch(error) {
+    Browser.msgBox(error.message);
+  }
+  return null;
+}
+
+
+
+//////////////
+// List of the Custom Metrics.
+// Parameter needed: GA property ID.
+function listCustomMetricsPerProperty(pid){
+  var sheet = SpreadsheetApp.getActive().getSheetByName('Property: ' + pid);
+  var sourceProperty = pid;
+  var sourceAccount = listAccountIdFromProperty(sourceProperty); 
+
+  try {
+    // Freezes the first 2 rows
+    sheet.setFrozenRows(2);
+    // Set values on the first row
+    sheet.getRange("A1:B1").setValues([[sourceAccount, sourceProperty]]);
+    // Set values on the second row
+    sheet.getRange("A2:F2").setValues([['Type', 'Index', 'Scope', 'Active', 'Name', 'ga Name']]);
+
+    var sourceMetrics = Analytics.Management.CustomMetrics.list(sourceAccount, sourceProperty);
+
+    // Extract items list from sourceMetrics variable
+    var items = sourceMetrics['items'];
+    if (items && items.length)  {
+      for (var i = 0; i < items.length; i++) {
+
+        // Appends a new row with 5 columns to the bottom of the
+        // spreadsheet containing the values in the array
+        sheet.appendRow(['Metric',items[i].index, items[i].scope, items[i].active, items[i].name, items[i].id ]);
+        //Logger.log(['Metric',items[i].index, items[i].scope, items[i].active, items[i].name, items[i].id ]);
+      }
+    }
+  } catch(error) {
+    Browser.msgBox(error.message);
+  }
+  return null;  
+}
+
+//////////////
+// List Custom Dimensions and Custom Metrics 
+// from a property ID prompted
+function listCDAndCMPerProperty(){
+
+  var ui = SpreadsheetApp.getUi();
+  var response = ui.prompt('Property ID', 'Enter the property ID: UA-XXXXXXX-X', ui.ButtonSet.OK_CANCEL);
+  
+  if (response.getSelectedButton() == ui.Button.OK) {
+    
+    var answer = response.getResponseText();
+    var accountid = listAccountIdFromProperty(answer); 
+    
+    // in case exists delete the sheet
+    deleteSheet('Property: ' + answer);
+    // create a sheet with property id name
+    addSheet('Property: ' + answer);
+
+    listCustomDimensionsPerProperty(answer);
+    listCustomMetricsPerProperty(answer);
+
+  } else if (response.getSelectedButton() == ui.Button.CANCEL) {
+    Logger.log('The user canceled the dialog.');
+  } else {
+    Logger.log('The user closed the dialog.');
+  }
+}
+
+function updateDimensionByProperty(property){
+  var prop = Analytics.Management.Webproperties.get(listAccountIdFromProperty(property), property);
+  //var sheet = getOrCreateSheet(prop.name);
+  var sheet = listOrInsertSheet(prop.name);
+  sheet.clear();
+  updateDimensionSheet(sheet, property);
+  sheet.activate()
+}
+
+function updateMetricsByProperty(property){
+  var prop = Analytics.Management.Webproperties.get(listAccountIdFromProperty(property), property);
+  var sheet = getOrCreateSheet(prop.name);
+  sheet.clear();
+  updateMetricSheet(sheet, property);
+  sheet.activate()
+}
+
+////////////
+// return account name to a given account id
+function getAccountName(aid){
+  var account_data = Analytics.Management.Accounts.list();
+  for(var i = 0; i < account_data.items.length; i++){
+    if(account_data.items[i].id == aid){
+      return account_data.items[i].name;
+    }
+  }
+  return 'unknown';
+}
+
+// returns an object containing headers and dimension data for a given property
+function getDimensionData(accountId, propertyid) {
+  try {
+    var dimensions = Analytics.Management.CustomDimensions.list(accountId, propertyid);
+    var property_data = Analytics.Management.Webproperties.get(accountId, propertyid);
+    
+    var data = {};
+    data.header = {
+      'property': property_data.name,
+      'pid': property_data.id,
+      'account': getAccountName(accountId),
+      'aid': property_data.accountId,
+      'created': property_data.created,
+      'updated': property_data.updated
+    };
+    data.dimensions = [];
+    for(i = 0; i < dimensions.items.length; i++){
+      data.dimensions.push([
+        dimensions.items[i].index,
+        dimensions.items[i].name,
+        dimensions.items[i].scope,
+        dimensions.items[i].active
+      ]);
+    }
+    return data;
+  } catch(error) {
+    Browser.msgBox(error.message);
+  }
+  return null;
+}
+
+////////////
+// writes the header information for a given property
+function writeHeader(sheet, upt, acc, prop, aid, pid){
+  sheet.getRange(1, 1, 5, 2).setValues([['Updated', upt], ['Account', acc], ['Property', prop], ['AccountId', aid], ['PropertyId', pid]]);
+  sheet.getRange(1, 2).setNumberFormat("DD/MM/YYYY hh:mm:ss");
+  sheet.setColumnWidth(2, 200);
+}
+
+
+function updateDimensionSheet(sheet, prop){
+  if (!prop) {
+    var header = getHeader(sheet);
+  } else {
+    var header = {
+      aid: '',
+      pid: ''
+    }
+  }
+  var aid = header.aid || listAccountIdFromProperty(prop);
+  var pid = header.pid || prop;
+  var results = getDimensionData(aid, pid);
+  property = results.header.property;
+  account = results.header.account;
+  
+  // remove old data
+  sheet.clearContents();
+  // insert new data
+  // Print the headers
+  writeHeader(sheet, new Date(), account, property, aid, pid);
+  
+  var labels = ['Index', 'Name', 'Scope', 'Active'];
+  results.dimensions.unshift(labels);
+  sheet.getRange(7, 1, results.dimensions.length, 4).setValues(results.dimensions);
+}
+
+
+////////////
+// shows a prompt and updates the corresponding property Dimension sheet
+function updatePropertyPrompt() {
+  var ui = SpreadsheetApp.getUi(); // Same variations.
+
+  var result = ui.prompt(
+      'Enter Universal Analytics Property ID',
+      'Enter an id of the form \'UA-xxxx-x\'',
+      ui.ButtonSet.OK_CANCEL);
+
+  // Process the user's response.
+  var button = result.getSelectedButton();
+  var text = result.getResponseText();
+  if (button == ui.Button.OK) {
+    // User clicked "OK".
+    if(/UA-\d+-\d+/i.test(text)){
+      updateDimensionByProperty(text);
+    } else {
+      throw Error('Wrong format for property. Use "UA-xxxxx-x".');
+    }
+  } else if (button == ui.Button.CANCEL) {
+    // User clicked "Cancel".
+  } else if (button == ui.Button.CLOSE) {
+    // User clicked X in the title bar.
+  }
+}
+////////////
+// shows a prompt and updates the corresponding property Metric sheet
+function updatePropertyMetricsPrompt() {
+  var ui = SpreadsheetApp.getUi(); // Same variations.
+
+  var result = ui.prompt(
+      'Enter Universal Analytics Property ID',
+      'Enter an id of the form \'UA-xxxx-x\'',
+      ui.ButtonSet.OK_CANCEL);
+
+  // Process the user's response.
+  var button = result.getSelectedButton();
+  var text = result.getResponseText();
+  if (button == ui.Button.OK) {
+    // User clicked "OK".
+    if(/UA-\d+-\d+/i.test(text)){
+      updateMetricsByProperty(text);
+    } else {
+      throw Error('Wrong format for property. Use "UA-xxxxx-x".');
+    }
+  } else if (button == ui.Button.CANCEL) {
+    // User clicked "Cancel".
+  } else if (button == ui.Button.CLOSE) {
+    // User clicked X in the title bar.
+  }
+}
+
+
+// This function creates new custom dimensions if they are available (up to 20 free version)
+// with the name unused and inactive. It promps for the Property ID
+function insertCustomDimensions(){
+
+  var ui = SpreadsheetApp.getUi();
+  var response = ui.prompt('Property ID', 'Enter the Property ID: UA-XXXXXXX-X', ui.ButtonSet.OK_CANCEL);
+  if (response.getSelectedButton() == ui.Button.OK) {
+      var pid = response.getResponseText();
+      var accId = listAccountIdFromProperty(pid);
+      console.log(accId);
+      console.log(pid);
+    } else if (response.getSelectedButton() == ui.Button.CANCEL) {
+    Logger.log('The user canceled the dialog.');
+    return;
+  } else {
+    Logger.log('The user closed the dialog.');
+    return;
+  };
+
+  var sourceDimensions = Analytics.Management.CustomDimensions.list(accId, pid);
+  // Extract items list from sourceDimensions variable
+  var numCustomDimensions = sourceDimensions['items'].length;
+
+  var resource = {
+      'name': 'unused',
+      'scope': 'HIT',
+      'active': false
+    }
+  Logger.log(numCustomDimensions);
+  for(var i = (numCustomDimensions + 1), numCD; i < 21; i++){
+  //Logger.log('inserting custom Dimension no.' + i + ': ' + resource.name + ' ' +  resource.scope + ' ' + resource.active + ' in property ' + pid);
+  Analytics.Management.CustomDimensions.insert(resource,accId,pid);
+  }
+
+}
+
+function copyAndPasteCustomDimension(){
+  var sourceAccountId, sourcePropertyId, sourceCDId, destinationAccountId, destinationPropertyId, destinationCDId, dimensionData;
+  sourceAccountId = getCellDisplayValue('COPY AND PASTE CDs','E3');
+  sourcePropertyId = getCellDisplayValue('COPY AND PASTE CDs','E4');
+  sourceCDId = getCellDisplayValue('COPY AND PASTE CDs','E5');
+  destinationAccountId = getCellDisplayValue('COPY AND PASTE CDs','I3');
+  destinationPropertyId = getCellDisplayValue('COPY AND PASTE CDs','I4');
+  destinationCDId = getCellDisplayValue('COPY AND PASTE CDs','I5');
+  
+  dimensionData = getCD(sourceAccountId, sourcePropertyId, sourceCDId);
+  //console.log(dimensionData);
+  
+  colorCells('COPY AND PASTE CDs','F13', 'green');
+  writeCells('COPY AND PASTE CDs','F13', 'Custom Dimension copied'); 
+  // Paste Custom Dimensions
+  colorCells('COPY AND PASTE CDs','F14', 'yellow');
+  writeCells('COPY AND PASTE CDs','F14', 'Pasting Custom Dimension...'); 
+
+  var resource = {};
+  resource = {
+    "name": dimensionData.name,
+    "scope": dimensionData.scope,
+    "active": dimensionData.active
+  };
+  //console.log(resource);
+
+  Analytics.Management.CustomDimensions.update(resource, destinationAccountId, destinationPropertyId, 'ga:dimension'+ destinationCDId);
+
+  colorCells('COPY AND PASTE CDs','F15', 'green');
+  writeCells('COPY AND PASTE CDs','F15', 'Custom Dimension pasted'); 
+}
+
+function copyAndPasteGA4CDs(){
+  var sourcePropertyId;
+  sourcePropertyId = "properties/311670568";
+  
+  var ui = SpreadsheetApp.getUi();
+  var response = ui.prompt('GA4 Property ID', 'Enter the Destination GA4 Property ID: 1234', ui.ButtonSet.OK_CANCEL);
+  if (response.getSelectedButton() == ui.Button.OK) {
+      var pid = response.getResponseText();
+      console.log(pid);
+      destinationPropertyId = "properties/" + pid;
+    } else if (response.getSelectedButton() == ui.Button.CANCEL) {
+    Logger.log('The user canceled the dialog.');
+    return;
+  } else {
+    Logger.log('The user closed the dialog.');
+    return;
+  };
+
+  // destinationPropertyId = "properties/" + getCellDisplayValue('COPY AND PASTE GA4 CDs','I3');
+  // console.log(sourcePropertyId);
+  var customDimensionsLst = AnalyticsAdmin.Properties.CustomDimensions.list(sourcePropertyId);   
+
+  // console.log(customDimensionsLst);
+  
+   if (customDimensionsLst.customDimensions && customDimensionsLst.customDimensions.length)  {
+     for (var i = 0; i < customDimensionsLst.customDimensions.length; i++) {
+        // console.log(customDimensionsLst.customDimensions[i].name);
+        // console.log(customDimensionsLst.customDimensions[i].parameterName);
+        // console.log(customDimensionsLst.customDimensions[i].displayName);
+        // console.log(customDimensionsLst.customDimensions[i].scope);
+        var body = {};
+        body["parameterName"] = customDimensionsLst.customDimensions[i].parameterName;
+        body["displayName"] = customDimensionsLst.customDimensions[i].displayName;
+        body["scope"] = customDimensionsLst.customDimensions[i].scope;
+
+        try{
+          console.log(body);
+          AnalyticsAdmin.Properties.CustomDimensions.create( body, destinationPropertyId)
+        }catch(error) {
+          console.log(error.message);
+          // Browser.msgBox(error.message);
+        }
+        
+     }
+   } else {console.log('There are no Custom Dimensions for the property Id', getCellDisplayValue('COPY AND PASTE GA4 CDs','E4'));Browser.msgBox(error.message);};
+   return customDimensionsLst.customDimensions;
+  
+}
+
+
+function getCD(aid,pid,dimensionId){
+  var accountId = aid;
+  console.log(accountId);
+  var propertyId = pid;
+  console.log(propertyId);
+  var customDimensionId = 'ga:dimension' + dimensionId;
+  console.log(customDimensionId);
+  try{
+    var customDimension = Analytics.Management.CustomDimensions.get(accountId, propertyId, customDimensionId);
+    console.log(customDimension);
+    return customDimension;
+  }catch(error) {
+    console.log(error.message);
+    //Browser.msgBox(error.message);
+  }
+}
+
+//GOALS
+
+/*
+ * List Goals
+ * Parameter needed: GA Account Id, GA property ID, GA View ID
+ */
+function listGoals(){ //accId, pid, viewId){
+
+  //accId = '194184363';
+  //pid = 'UA-194184363-1';
+  //viewId = '240829124';
+
+  var ui = SpreadsheetApp.getUi();
+  var response = ui.prompt('Property ID', 'Enter the view ID:', ui.ButtonSet.OK_CANCEL);
+  
+  if (response.getSelectedButton() == ui.Button.OK) {
+      var viewId = response.getResponseText();
+      console.log(viewId);
+      var pid = listPidFromViewId(viewId);
+      console.log(pid);
+      var accId = listAccountIdFromProperty(pid);
+      console.log(accId);
+      
+      listOrInsertSheet('View: ' + viewId);
+      deleteAllBelow('View: ' + viewId);
+      //activate property ID sheet
+      var sheet = SpreadsheetApp.getActive().getSheetByName('View: ' + viewId);
+      
+      // Freezes the first row
+      sheet.setFrozenRows(2);
+      // Set values on the first row
+      sheet.getRange("A1:C1").setValues([[accId, pid, viewId]]);
+      // Set values of goals on the second row
+      sheet.getRange("A2:Q2").setValues([['Id',	'Name',	'Active', 'Type', 'URL', 'Case Sensitive', 'Match URL Type', 'First Step Required',  'Steps', 'Step Number', 'Step Name', 'Step URL', 'Criteria Type', 'Criteria Expression',	'Criteria Match Type', 'Event Conditions', 'Use Event Values']]);
+
+      goalsList = Analytics.Management.Goals.list(accId, pid, viewId);
+      //Logger.log('habemus goals');
+      //Logger.log(goalsList);
+      if (goalsList && !goalsList.error){
+        //printGoals(goalsList, viewId);
+        var goals = goalsList.items;
+        console.log('And the items of the goals are:');
+        console.log(goals);
+        
+        
+        for (var i = 0, goal; goal = goals[i]; i++) {
+          if (goal.urlDestinationDetails) {
+            console.log('Start printDestinationDetails function');
+            printDestinationDetails(goal, viewId);
+            console.log('End printDestinationDetails function');
+          } else if (goal.visitTimeOnSiteDetails) {
+            printComparisonDetails(goal);
+          } else if (goal.visitNumPagesDetails) {
+            printComparisonDetails(goal);
+          } else if (goal.eventDetails) {
+            console.log('Start printEventDetails function');
+            printEventDetails(goal, viewId);
+            console.log('End printEventDetails function');
+          } else {
+            console.log(goal.id, goal.name, goal.value, goal.active, goal.type)
+          }
+        }
+      } else {
+        Browser.msgBox('This view has no goals at all');
+        return;
+      }
+
+  } else if (response.getSelectedButton() == ui.Button.CANCEL) {
+    Logger.log('The user canceled the dialog.');
+    return;
+  } else {
+    Logger.log('The user closed the dialog.');
+    return;
+  }
+
+}
+
+
+//
+// Iterate through event Goals.
+function printEventDetails(goal, viewId) {
+  var sheet = SpreadsheetApp.getActive().getSheetByName('View: ' + viewId);
+  console.log(goal);
+  sheet.appendRow([goal.id, goal.name, goal.active, goal.value, goal.type, , , , , , , , , , , ]);
+  if (goal.eventDetails.eventConditions && goal.eventDetails.eventConditions.length > 0) {
+    var conditions = goal.eventDetails.eventConditions;
+    console.log(conditions);
+    for (var i = 0, condition; condition = conditions[i]; i++) {
+      //console.log('Condition Type: ' + condition.type);
+      if (condition.type === 'VALUE') {        
+        sheet.appendRow([, , , , , , , , , , , , , condition.type, condition.expression,	condition.matchType]);
+        //console.log(condition.type, condition.matchType, condition.expression, condition.comparisonType, condition.comparisonValue);
+      } else {
+        //Logger.log('this is not a value type');
+        sheet.appendRow([, , , , , , , , , , , , , condition.type, condition.expression,	condition.matchType]);
+      }
+    }    
+  } else{    
+    Logger.log('This event detail has no conditions');    
+    Logger.log('the event conditions are: ' + conditions);
+  }
+}
+
+//
+// Iterate through destination Goals.
+function printDestinationDetails(goal, viewId) {
+  var sheet = SpreadsheetApp.getActive().getSheetByName('View: ' + viewId);
+  console.log(goal);
+  sheet.appendRow([goal.id, goal.name, goal.active, goal.value, goal.type, goal.urlDestinationDetails.url, goal.urlDestinationDetails.caseSensitive, goal.urlDestinationDetails.matchType, goal.urlDestinationDetails.firstStepRequired,  goal.urlDestinationDetails.steps.length, , , , , , , , , ]);
+  // Iterate through the steps.
+  var steps = goal.urlDestinationDetails.steps;
+  if (steps && steps.length > 0) {
+    console.log('the steps are:  ' + steps);
+    for (var i = 0, step; step = steps[i]; i++) {
+      sheet.appendRow([, , , , , , , ,  , step.firstStepRequired, step.number, step.name, step.url, , ,	, , ]);
+    }
+  } else {
+    console.log('No Steps Configured.');
+  }
+
+}
+
+//
+// Iterate through comparison Goals.
+function printComparisonDetails(goal, viewId) {
+  Logger.log(goal);
+  var sheet = SpreadsheetApp.getActive().getSheetByName('View: ' + viewId);
+  if (goal.visitTimeOnSiteDetails){
+    var details = goal.visitTimeOnSiteDetails;
+  } else if (goal.visitNumPagesDetails) {
+    var details = goal.visitNumPagesDetails
+  }
+  sheet.appendRow([goal.id, goal.name, goal.active, goal.value, goal.type, , , , ,  , , , , , ,	, , , , details.comparisonType, details.comparisonValue]); 
+}
+
+/*
+ * This request gets an existing goal.
+ */
+function getGoal(){
+
+  var accId,pId,viewId,goalId,response;
+  accId = getCellDisplayValue('COPY AND PASTE GOAL','E3');
+  pId = getCellDisplayValue('COPY AND PASTE GOAL','E4');
+  viewId = getCellDisplayValue('COPY AND PASTE GOAL','E5');
+  goalId = getCellDisplayValue('COPY AND PASTE GOAL','E6');
+
+  if (typeof accId !== 'string' || typeof pId !== 'string' || typeof viewId !== 'string'  || typeof goalId !== 'string' ){
+  console.log('Some of the values of the source are not string');
+  return; }
+
+  try {
+    goalResponse = Analytics.Management.Goals.get(accId, pId, viewId, goalId);
+    console.log('The goal Response is:');
+    console.log(goalResponse);
+    return goalResponse;
+  }catch(error) {
+    //console.log(error.message);
+    Browser.msgBox(error.message);
+  }
+}
+
+function updateGoal() {
+
+  var accId, pId, viewId,goalId, goalResponse, goal, tabName;
+
+  tabName = 'COPY AND PASTE GOAL';
+  goalResponse = getGoal();
+  //console.log('The goalResponse is:');
+  //console.log(goalResponse);
+  accId = getCellDisplayValue(tabName,'I3');
+  pId = getCellDisplayValue(tabName,'I4');
+  viewId = getCellDisplayValue(tabName,'I5');
+  goalId = getCellDisplayValue(tabName,'I6'); 
+
+  if (typeof accId !== 'string' || typeof pId !== 'string' || typeof viewId !== 'string'  || typeof goalId !== 'string' ){
+  //console.log('Some of the values of the source are not string');
+  Browser.msgBox('Some of the values of the cells from the source view are not right');
+  return; }
+
+  if (goalResponse.urlDestinationDetails) {
+    goal = goalResponse.urlDestinationDetails;
+	} else if (goalResponse.visitTimeOnSiteDetails) {
+    goal = goalResponse.visitTimeOnSiteDetails;
+	} else if (goalResponse.visitNumPagesDetails) {
+		goal = goalResponse.visitNumPagesDetails;
+	} else if (goalResponse.eventDetails) {
+		goal = goalResponse.eventDetails;
+	}
+
+  goal = goalResponse;
+  delete goal.kind;
+  delete goal.created;
+  delete goal.updated;
+  delete goal.parentLink;
+  delete goal.selfLink;
+  delete goal.accountId;
+  delete goal.webPropertyId;
+  delete goal.internalWebPropertyId;
+  delete goal.profileId;
+  delete goal.id;
+
+  console.log('What\'s the goal now:');
+  console.log(goal);
+
+  try {
+    Analytics.Management.Goals.update(goal, accId, pId, viewId, goalId);
+    console.log('Goal updated');
+    colorCells('COPY AND PASTE GOAL','F13', 'green');
+    writeCells('COPY AND PASTE GOAL','F13', 'The goal has been updated on the destination view'); 
+    Browser.msgBox('The goal ' + goalId + ' has been updated on the destination view');
+  }catch(error) {
+    if(error.message == 'API call to analytics.management.goals.update failed with error: goal: ' + goalId + ' not found.'){
+      colorCells('COPY AND PASTE GOAL','F13', 'yellow');
+      writeCells('COPY AND PASTE GOAL','F13', 'The goal doesn\'t exist yet'); 
+      console.log('The goal doesn\'t exist yet');
+      var ui = SpreadsheetApp.getUi();
+      var response = ui.alert('The goal no. ' + goalId + ' doesn\'t exist on the destination View. Do you want to create a new Goal?', ui.ButtonSet.YES_NO);
+      if (response == ui.Button.YES) {
+        goal.type = goalResponse.type;
+        goal.active = goalResponse.active;
+        goal.name = goalResponse.name;
+        goal.id = goalId;
+        //console.log('Modified goal Result:');
+        //console.log(goal);
+        colorCells('COPY AND PASTE GOAL','F13', 'yellow');
+        writeCells('COPY AND PASTE GOAL','F13', 'Updating the goal'); 
+        insertGoal(goal,accId,pId,viewId);
+        colorCells('COPY AND PASTE GOAL','F13', 'green');
+        writeCells('COPY AND PASTE GOAL','F13', 'Goal updated'); 
+      } else {
+        Browser.msgBox('Existing from the update of the goal');
+        return;
+      }
+    } else {
+      Browser.msgBox(error.message);
+    }
+  }
+}
+
+function insertGoal(goal,accId,pId,viewId){
+  try {
+      console.log('inserting goal');
+      //console.log('The goal Object is:');
+      //console.log(goal);
+      Analytics.Management.Goals.insert(goal,accId,pId,viewId);
+      //console.log('goal inserted');
+      colorCells('COPY AND PASTE GOAL','F13', 'green');
+      writeCells('COPY AND PASTE GOAL','F13', 'The goal no.' + goal.id + ': \"'+ goal.name + '\" has been inserted for the destination view');         
+      Browser.msgBox('The goal no.' + goal.id + ': \"'+ goal.name + '\" has been inserted for the destination view');
+  } catch(error){
+    colorCells('COPY AND PASTE GOAL','F13', 'red');
+    writeCells('COPY AND PASTE GOAL','F13', error.message);         
+    console.log(error.message);
+  }
+}
+
+
+//////////////////////
+// USERS
+//////////////////////
+
+
+/*
+ * This function creates a new Account User Link.
+ */
+function insertAccountUserLink(accId, permissions, accEmail) {
+  
+  try {
+    var accounts, accId, permissions, accEmail;
+    accounts = listGAAccounts();
+    if (accounts.items && accounts.items.length)  {
+     var accountsId;
+     accountsId = [];
+     for (var i = 0; i < accounts.items.length; i++) {
+       accountsId.push(accounts.items[i].id);
+       }
+   }    
+    //console.log(accountsId);
+
+    //email
+    accEmail = getCellDisplayValue('INSERT OR UPDATE USER','E4');
+    if (typeof accEmail !== 'string'){
+      //console.log('Email is not string');
+      Browser.msgBox('Email is not string');
+      return; }
+    //console.log(accEmail);
+
+    //permissions
+    permissions = [];
+  
+    if( getCellDisplayValue('INSERT OR UPDATE USER','F5') === 'YES'){
+      permissions.push('READ_AND_ANALYZE');
+    }    
+    if( getCellDisplayValue('INSERT OR UPDATE USER','F6') === 'YES'){
+      permissions = ['READ_AND_ANALYSE','COLLABORATE'];
+    }    
+    if( getCellDisplayValue('INSERT OR UPDATE USER','F7') === 'YES'){
+      permissions = ['READ_AND_ANALYSE','COLLABORATE', 'EDIT'];
+    }    
+    if( getCellDisplayValue('INSERT OR UPDATE USER','F8') === 'YES'){
+      permissions.push('MANAGE_USERS');
+    }   
+    //console.log('the permissions are: ' + permissions);
+
+    if(permissions.length < 1 && accounts.length < 1){
+        return } else {
+      var eul = Analytics.newEntityUserLink();
+
+      eul.permissions = Analytics.newEntityUserLinkPermissions();
+      eul.permissions.local = permissions;
+
+      eul.userRef = Analytics.newUserRef ();
+      eul.userRef.email = accEmail;
+      
+      for (var i = 0; i < accountsId.length; i++) {
+       //insert the user's permisions in the account
+       Analytics.Management.AccountUserLinks.insert (eul, accountsId[i]);
+       //console.log('inserting the user ' + accEmail + ' with permissions ' + permissions + ' in account ID ' + accounts[i]);
+      }      
+    };
+    Browser.msgBox('Permissions for ' + accEmail + ' granted');
+  } catch(error) {
+      colorCells('INSERT OR UPDATE USER','E18', 'red');
+      writeCells('INSERT OR UPDATE USER','E18', error.message);     
+      Browser.msgBox(error.message);
+  }
+  return null;
+}
+
+/*
+ * This request deletes an existing Account User Link.
+ */
+function deleteAccountUserLink(accEmail) {
+  try {
+    var ui = SpreadsheetApp.getUi();
+    var response = ui.prompt('DELETE USER', 'Enter the email: blablabla@gmail.com', ui.ButtonSet.OK_CANCEL);
+  
+    if (response.getSelectedButton() == ui.Button.OK) {
+      var accEmail = response.getResponseText();
+      console.log(accEmail);
+
+    var response = Analytics.Management.AccountSummaries.list();
+    //console.log(response);
+    //console.log(response.items.length);
+      if (response.items && !response.error)  {
+        GAaccounts = response.items;
+        //console.log(GAaccounts); 
+        for (var i = 0, GAaccount; GAaccount = GAaccounts[i]; i++) {
+          //console.log('searching for the GA account: ' + GAaccount.name);
+
+          var accountUserLink = getLinkID(accEmail, GAaccount.id, GAaccount.name);
+          //console.log('accountUserLink is: ' + accountUserLink);
+          if( typeof accountUserLink === 'undefined'){
+            //console.log('No email found');
+          }else{
+            var linkId = GAaccount.id + ':'+ accountUserLink
+            //console.log('removed ' + accEmail + ' with Link Id ' + linkId + ' from the account ' + GAaccount.name + ' with Id ga:' + GAaccount.id);      
+            Analytics.Management.AccountUserLinks.remove (GAaccount.id, linkId);
+            Browser.msgBox('removed ' + accEmail + ' with Link Id ' + linkId + ' from the account ' + GAaccount.name + ' with Id ga:' + GAaccount.id);
+          }           
+        }
+      }
+
+    } else if (response.getSelectedButton() == ui.Button.CANCEL) {
+      Logger.log('The user canceled the dialog.');
+      return;
+    } else {
+      Logger.log('The user closed the dialog.');
+      return;
+    }
+
+  } catch(error) {
+      //console.log(error.message);
+      colorCells('INSERT OR UPDATE USER','E18', 'red');
+      writeCells('INSERT OR UPDATE USER','E18', error.message); 
+      Browser.msgBox(error.message);
+    };
+    return null;
+}
+
+function getLinkID(accEmail, GAaccountId, GAaccountName){
+  var response = Analytics.Management.AccountUserLinks.list(GAaccountId);
+  
+  if( response.items && !response.error){
+    var usersProperties = response.items;    
+    //console.log('there are ' + usersProperties.length + ' users\' properties for the GA account ' + GAaccountName);
+    //console.log('usersProperties are: ' + usersProperties);
+    for (var i = 0; i < usersProperties.length; i++){
+      var usersRef = usersProperties[i].userRef;
+      //console.log('userRef is: ' + usersRef);
+      if(usersRef.email === accEmail){
+        //console.log('Email found for Account Name: ' + GAaccountName + ' !!!!!!!!!!!!!!!!!!!!!');
+        return usersRef.id;
+      }else{return};
+    }
+  } else {
+    //console.log('there are no Accounts for the GA: ' + GAaccountName);
+    Browser.msgBox('there are no Accounts for the GA: ' + GAaccountName);
+    return}
+}
+
+
+////////////////////
+// automation
+////////////////////
+
+function automation(){
+  var accId, pId;
+  accId = getCellDisplayValue('CREATE A PROPERTY','H3');
+  pId = getCellDisplayValue('CREATE A PROPERTY','H4');
+  //create new property
+  colorCells('CREATE A PROPERTY','E9', 'yellow');
+  writeCells('CREATE A PROPERTY','E9', 'Creating a new property...');
+  var propertyResponse = insertProperty();
+  colorCells('CREATE A PROPERTY','E9', 'green');
+  writeCells('CREATE A PROPERTY','E9', 'GA property ID: ' + propertyResponse.id);
+  //create new Views
+  colorCells('CREATE A PROPERTY','E10', 'yellow');
+  writeCells('CREATE A PROPERTY','E10', 'Inserting Filtered View...');
+  var viewResponse = insertView(propertyResponse, 'Filtered View'); 
+  colorCells('CREATE A PROPERTY','E10', 'green');
+  writeCells('CREATE A PROPERTY','E10', 'GA Default View: ' + viewResponse.name); 
+  writeCells('CREATE A PROPERTY','E10', 'GA View ID: ' + viewResponse.id); 
+  // Copy and Paste Goals
+  colorCells('CREATE A PROPERTY','E11', 'yellow');
+  writeCells('CREATE A PROPERTY','E11', 'Copying Goals on Filtered View...');
+  copyAndPasteGoals(viewResponse);
+  colorCells('CREATE A PROPERTY','E11', 'green');
+  writeCells('CREATE A PROPERTY','E11', 'Goals on Filtered View pasted');
+  colorCells('CREATE A PROPERTY','E12', 'yellow');
+  writeCells('CREATE A PROPERTY','E12', 'Inserting Test View...');
+  insertView(propertyResponse, 'Test View');
+  colorCells('CREATE A PROPERTY','E12', 'green');
+  writeCells('CREATE A PROPERTY','E12', 'Test View Inserted'); 
+  colorCells('CREATE A PROPERTY','E13', 'yellow');
+  writeCells('CREATE A PROPERTY','E13', 'Inserting RAW View...');  
+  insertView(propertyResponse, 'RAW View');
+  colorCells('CREATE A PROPERTY','E13', 'green');
+  writeCells('CREATE A PROPERTY','E13', 'RAW View Inserted');
+  // Copy and paste Custom Dimensions
+  colorCells('CREATE A PROPERTY','E14', 'yellow');
+  writeCells('CREATE A PROPERTY','E14', 'Copying and Pasting Custom Dimensions...'); 
+  copyAndPasteCDs(propertyResponse.id);
+  colorCells('CREATE A PROPERTY','E15', 'green');
+  writeCells('CREATE A PROPERTY','E15', 'Custom Dimensions pasted'); 
+}
+
+
+// insert a Web property based on the values written on the cell
+// and returns the object for grabbing property id and account it
+function insertProperty(){
+  var accId = getCellDisplayValue('CREATE A PROPERTY','D3');
+
+  var resource = {};
+  resource.name = getCellDisplayValue('CREATE A PROPERTY','D4');
+  resource.websiteUrl = getCellDisplayValue('CREATE A PROPERTY','D5');
+  resource.industryVertical = "UNSPECIFIED";
+  resource.dataRetentionTtl = "MONTHS_50";
+  try {
+    var response = Analytics.Management.Webproperties.insert(resource, accId);
+    return response;
+  }catch(error){
+    //console.log(error.message);
+    colorCells('CREATE A PROPERTY','E16', 'red');
+    writeCells('CREATE A PROPERTY','E16', error.message); 
+    Browser.msgBox(error.message);
+  }
+
+}
+
+
+function insertView(request,viewName){
+  var accId, pId, resource;
+  accId = request.accountId;
+  pId = request.id;
+  resource = {};
+  resource.name = request.name + ' ' + viewName;
+  resource.websiteUrl = request.websiteUrl;
+  resource.type = "WEB";
+  resource.currency = "EUR";
+  resource.timezone = "Etc/GMT";
+  resource.botFilteringEnabled = true;
+  resource.eCommerceTracking = false;
+  try{
+    var response = Analytics.Management.Profiles.insert(resource,accId,pId);
+    return response;
+  }catch(error){
+    //console.log(error.message);
+    colorCells('CREATE A PROPERTY','E16', 'red');
+    writeCells('CREATE A PROPERTY','E16', error.message); 
+    Browser.msgBox(error.message);
+  }
+}
+
+function copyAndPasteGoals(viewResponse){
+  var accId, pId, viewId, goalResponse, viewResponse, sourceAccId, sourcePId, sourceViewId;
+  accId = viewResponse.accountId;
+  pId = viewResponse.webPropertyId;
+  viewId = viewResponse.id;
+  sourceAccId = getCellDisplayValue('CREATE A PROPERTY','H3');
+  sourcePId = getCellDisplayValue('CREATE A PROPERTY','H4');
+  sourceViewId = getCellDisplayValue('CREATE A PROPERTY','H5');
+  try {
+    // copy goals from 13 to 20
+    for ( var i = 13; i < 21; i++){
+      goalResponse = Analytics.Management.Goals.get(sourceAccId, sourcePId, sourceViewId, i);
+      delete goalResponse.kind;
+      delete goalResponse.created;
+      delete goalResponse.updated;
+      delete goalResponse.parentLink;
+      delete goalResponse.selfLink;
+      delete goalResponse.accountId;
+      delete goalResponse.webPropertyId;
+      delete goalResponse.internalWebPropertyId;
+      delete goalResponse.profileId;
+      Analytics.Management.Goals.insert(goalResponse,accId,pId,viewId);
+    }
+  } catch (error){
+    //console.log(error.message);
+    colorCells('CREATE A PROPERTY','E16', 'red');
+    writeCells('CREATE A PROPERTY','E16', error.message); 
+    Browser.msgBox(error.message);
+  }
+  return viewResponse;
+}
+
+// This function copy the custom dimensions from the account Id and Property id given in the sheet
+// and paste them in the new property created
+// function copyAndPasteCDs(propertyId){
+function copyAndPasteCDs(){
+
+  var sourceAccountId = getCellDisplayValue('CREATE A PROPERTY','H3');
+  var sourcePropertyId = getCellDisplayValue('CREATE A PROPERTY','H4');
+  // var destinationPropertyId = propertyId;
+  // var destinationPropertyId = 'UA-194184363-1';
+  var destinationPropertyId = 'UA-179757885-11';
+  var destinationAccountId = listAccountIdFromProperty(destinationPropertyId);
+
+  var sourceDimensions = Analytics.Management.CustomDimensions.list(sourceAccountId, sourcePropertyId);
+  var sourceDimensionsItems = sourceDimensions.items;
+  // Logger.log(sourceDimensionsItems);
+  // Logger.log(sourceDimensionsItems.length);
+  // Extract items list from sourceDimensions variable
+  var noCustomDimensions = sourceDimensionsItems.length;
+
+  try {
+    for(var i = 0; i < noCustomDimensions; i++){
+      // Logger.log('inserting custom Dimension no.' + (i + 1) + ': ' + sourceDimensionsItems[i].name + ' ' +  sourceDimensionsItems[i].scope + ' ' + sourceDimensionsItems[i].active + ' in property ' + destinationPropertyId);
+      var resource = {
+      'name': sourceDimensionsItems[i].name,
+      'scope': sourceDimensionsItems[i].scope,
+      'active': sourceDimensionsItems[i].active
+      }
+      
+      Analytics.Management.CustomDimensions.insert(resource,destinationAccountId,destinationPropertyId);
+    // Logger.log(resource);
+    }
+  } catch (error){
+    Logger.log(error.message);
+    colorCells('CREATE A PROPERTY','E15', 'red');
+    writeCells('CREATE A PROPERTY','E15', error.message); 
+    Browser.msgBox(error.message);
+  }
+}
+
+function pasteCustomDimensions(accountId, propertyId, dimensions){
+  var accountId, propertyId, dimensions, dimensionsData;
+  accountId = accountId; //propertyResponse.accountId
+  propertyId = propertyId; //propertyResponse.id;
+  
+  dimensionsData = getDimensionData(accountId, propertyId);
+  dimensionsData = dimensionsData.dimensions;
+
+  if (dimensionsData.length >= 20){ 
+     try {
+        for (var i=0 in dimensions){
+          /*console.log(accountId);
+          console.log(propertyId);
+          console.log(dimensions[i][0]);
+          console.log(dimensions[i][1]);
+          console.log(dimensions[i][2]);
+          console.log(dimensions[i][3]);*/
+          var resource = {};
+          resource = {
+            "name": dimensions[i][1],
+            "scope": dimensions[i][2],
+            "active": dimensions[i][3]
+          };
+          //console.log(resource);
+          //console.log(typeof dimensions[i][0]);
+          Analytics.Management.CustomDimensions.update(resource, accountId, propertyId, 'ga:dimension'+ dimensions[i][0]);
+        }  
+      } catch (error){
+        Browser.msgBox(error.message);
+        //console.log(error.message);
+        //colorCells('CREATE A PROPERTY','E16', 'red');
+        //writeCells('CREATE A PROPERTY','E16', error.message);   
+      }
+  } else {
+    try{
+      insertCSustomDimensions();
+      Browser.msgBox('There were no Custom Dimensions in this property. Run again this script'); 
+    } catch (error){
+      Browser.msgBox(error.message);
+      //console.log(error.message);
+    }
+  }  
+  return;
+};
+
+// This function creates new custom dimensions if they are available (up to 20 free version)
+// with the name unused and inactive. It promps for the Property ID
+function insertCDs(sourcePropertyId, destinationPropertyId){
+
+  var sourcePropertyId = sourcePropertyId;
+  var sourceAccountId = listAccountIdFromProperty(sourcePropertyId);
+
+  var destinationPropertyId = sourcePropertyId;
+  var destinationAccountId = listAccountIdFromProperty(sourcePropertyId);
+
+  var sourceDimensions = Analytics.Management.CustomDimensions.list(accId, pid);
+  // Extract items list from sourceDimensions variable
+  var numCustomDimensions = sourceDimensions['items'].length;
+
+  var resource = {
+      'name': 'unused',
+      'scope': 'HIT',
+      'active': false
+    }
+  Logger.log(numCustomDimensions);
+  for(var i = (numCustomDimensions + 1), numCD; i < 21; i++){
+  //Logger.log('inserting custom Dimension no.' + i + ': ' + resource.name + ' ' +  resource.scope + ' ' + resource.active + ' in property ' + pid);
+  Analytics.Management.CustomDimensions.insert(resource,accId,pid);
+  }
+
+}
+
+
+//////////////////////
+// FILTERS
+//////////////////////
+
+function copyAndUpdateFilter(){
+  sourceAccId = getCellDisplayValue('FILTERS','F9');
+  filterName = getCellDisplayValue('FILTERS','F10');
+  destinationAccountId = getCellDisplayValue('FILTERS','L9');
+  var sourceFilterId = getFilterId(sourceAccId, filterName);
+  console.log('The Filter Id is: ' + sourceFilterId);
+  var filter = getFilter(sourceAccId, sourceFilterId);
+  updateFilter(destinationAccountId,filterName,filter);  
+}  
+
+function getFilterId(accId,filterName){
+  var filterList = Analytics.Management.Filters.list(accId);
+  filterList = filterList.items;
+  //console.log(filterList);
+  try{
+    for (var i = 0, filter; filter = filterList[i]; i++) {
+      //console.log('Filter Name: ' + filter.name);
+      //console.log('Filter ID: ' + filter.id);
+      if (filter.name === filterName) {        
+        console.log('Filter Name: ' + filter.name);
+        console.log('filter Id found: ' + filter.id);      
+        return filter.id;
+      }
+    }
+  } catch(error){
+    //Browser.msgBox(error.message);
+    console.log('filter Id NOT found');
+    console.log(error.message);
+  } 
+}
+
+function getFilter(sourceAccId,filterId){
+  try{
+    var response = Analytics.Management.Filters.get(sourceAccId,filterId);
+    console.log('Filter copied: ' + response);
+    console.log(response);
+    return response;
+  } catch(error) {
+    //Browser.msgBox(error.message);
+    console.log(error.message);
+  }
+}
+
+function updateFilter(destinationAccountId,filterName,filter){
+  try{
+    destinationFilterId = getFilterId(destinationAccountId,filterName);
+  } catch(error) {
+    //Browser.msgBox(error.message);
+    console.log(error.message);
+  }
+  try{
+    var resource = {};
+    resource.name = filter.name;
+    resource.type = filter.type;
+    resource.id = filter.id;
+    switch (resource.type) {
+      case 'INCLUDE':
+      resource.includeDetails = filter.includeDetails;
+      break;
+      case 'EXCLUDE':
+      resource.excludeDetails = filter.excludeDetails;
+      break;
+      case 'LOWERCASE':
+      resource.lowercaseDetails = filter.lowercaseDetails;
+      break;
+      case 'UPPERCASE':
+      resource.uppercaseDetails = filter.uppercaseDetails;
+      break;
+      case 'ADVANCED':
+      resource.advancedDetails = filter.advancedDetails;
+      break;
+      case 'SEARCH_AND_REPLACE':
+      resource.searchAndReplaceDetails = filter.searchAndReplaceDetails;
+      break;
+      default:
+      console.log('no details found');
+      break;
+    }
+    console.log(resource);
+    Analytics.Management.Filters.update(resource,destinationAccountId,destinationFilterId);
+    console.log('Filter updated');
+  } catch(error) {
+    //Browser.msgBox(error.message);
+    console.log(error.message);
+  }
+
+}
+
+//
+// TESTING
+//
+
+function test1(){
+  //writeCells('CREATE A PROPERTY','E9', 'this is a test');
+  colorCells('COPY AND PASTE GOAL','F13', 'light green 1');
+}
+
+
+function insertAccountUserLinkBackUp() {
+  var eul = Analytics.newEntityUserLink ();
+  
+  eul.permissions = Analytics.newEntityUserLinkPermissions ();
+  eul.permissions.local = ["READ_AND_ANALYZE"];
+  
+  eul.userRef = Analytics.newUserRef ();
+  eul.userRef.email = "damupi@gmail.com"; // It won't work unless you change it
+  
+  Analytics.Management.AccountUserLinks.insert (eul, "194184363");
+}
+
+/*
+ * This function List all the Users for an account
+ */
+function listAccountUser(accEmail){
+  var accountId, parameter, response;
+  accountId = '194184363';
+  parameter = {};
+  parameter = "{'accountId': accountId}";
+
+  //list all accounts the user has access
+  //gapi.client.analytics.management.accountSummaries.list()
+  response = Analytics.Management.accountSummaries.list();
+  
+  if (response && !response.error) {
+    if (response.items) {
+      printAccountSummaries(response.items);
+    }
+  } else {
+    //console.log('There was an error: ' + response.message);
+    Browser.msgBox('There was an error: ' + response.message);
+  }
+  
+  
+  // Iterate through all users' list
+
+  if (results && !results.error) {
+      var accountLinks = results.items;
+      for (var i = 0, accountUserLink; accountUserLink = accountLinks[i]; i++) {
+        var entity = accountUserLink.entity;
+        var accountRef = entity.accountRef;
+        var userRef = accountUserLink.userRef;
+        var permissions = accountUserLink.permissions;
+
+        console.log('Account User Link Id: ' + accountUserLink.id);
+        console.log('Account User Link Kind: ' + accountUserLink.kind);
+        console.log('User Email: ' + userRef.email);
+        console.log('Permissions effective: ' + permissions.effective);
+        console.log('Permissions local: ' + permissions.local);
+        console.log('Account Id: ' + accountRef.id);
+        console.log('Account Kind: ' + accountRef.kind);
+        console.log('Account Name: ' + accountRef.name);
+      }
+    }
+
+};
+
+
+
+
+/*
+ * This function returns the LinkId of the user in the Account
+ */
+function getLinkId(accEmail){
+  if (typeof accEmail !== 'string'){
+    console.log('Email is not string');
+    return; }
+
+  //list all the users for the account
+  listAccountUser(accEmail);
+  //iterate on the object to see the email
+  // for x in the object ....
+  if(list.contains(accEmail)){return true;} else {return false;}
+};
